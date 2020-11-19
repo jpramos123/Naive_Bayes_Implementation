@@ -14,7 +14,7 @@ features = {0: {"sunny" : 0, "overcast": 1, "rain": 2},
 
 class NaiveBayes:
 
-    def __init__(self, features, targets):
+    def __init__(self, features, targets, model_type):
         self.features = features
         self.targets = targets
         self.inverted_targets = {}
@@ -22,6 +22,11 @@ class NaiveBayes:
         self.targets_mapping = {}
         self.targets_amounts = {}
         self.learn_matrix = []
+        self.type = model_type
+        self.classes_mean = {}
+        self.classes_deviation = {}
+        self.features_mean = {}
+        self.features_deviation = {}
 
     def create_feature_dict(self):
 
@@ -79,27 +84,90 @@ class NaiveBayes:
 
     def fit(self):
 
-        self.create_feature_dict()
-        self.create_targets_dict()
-        self.build_learn_table_structure()
-        self.learn()
+
+        if self.type == 'nc':
+            self.create_feature_dict()
+            self.create_targets_dict()
+            self.build_learn_table_structure()
+            self.learn()
+
+        elif self.type == 'c':
+            self.create_targets_dict()
+            self.means()
+            self.standard_deviation()
+        else:
+            print("Method not available")
+
+    def means(self):
+        
+        # Features Mean
+        for i in range(self.features.shape[1]):
+            self.features_mean[i] = np.mean(self.features[:,i])
+
+        # Targets Mean        
+        for i in range(len(self.features)):
+            if self.targets[i] not in self.classes_mean.keys():
+                self.classes_mean[self.targets[i]] = np.sum(self.features[i])
+            else:
+                self.classes_mean[self.targets[i]] += np.sum(self.features[i])
+    
+        for i in self.classes_mean.keys():
+            self.classes_mean[i] = self.classes_mean[i]/len(np.where(self.targets == i)[0])
+        
+        #print(self.classes_mean)
+
+    def standard_deviation(self):
+
+        # Features Standard Deviation
+        for i in range(self.features.shape[1]):
+            self.features_deviation[i] = np.std(self.features[:,i])
+            
+        # Targets Standard Deviation
+
+        for i in range(len(self.features)):
+            if self.targets[i] not in self.classes_deviation.keys():
+                self.classes_deviation[self.targets[i]] = [self.features[i]]
+            else:
+                self.classes_deviation[self.targets[i]].append(self.features[i])
+        
+        #print(self.classes_deviation)
+        #print(self.classes_deviation[0])
+        for i in self.classes_deviation.keys():
+            self.classes_deviation[i] = np.std(self.classes_deviation[i])
+            
+        #print(self.classes_deviation)
 
     def predict(self, arr_input):
 
-        result = [1 for _ in self.inverted_targets.keys()]
-        for targets_idx in self.inverted_targets:
-            for f in range(len(self.learn_matrix)):
-                result[targets_idx] = result[targets_idx] * self.learn_matrix[f][targets_idx][self.features_mapping[f][arr_input[f]]]
-            result[targets_idx] = result[targets_idx] * self.targets_amounts[self.inverted_targets[targets_idx]]/len(self.targets)
+        if self.type == 'nc':
+            result = [1 for _ in self.inverted_targets.keys()]
+            for targets_idx in self.inverted_targets:
+                for f in range(len(self.learn_matrix)):
+                    result[targets_idx] = result[targets_idx] * self.learn_matrix[f][targets_idx][self.features_mapping[f][arr_input[f]]]
+                result[targets_idx] = result[targets_idx] * self.targets_amounts[self.inverted_targets[targets_idx]]/len(self.targets)
+            
+            max_res = 0
+            max_idx = 0
+            for i in range(len(result)):
+                if result[i] > max_res:
+                    max_res = result[i]
+                    max_idx = i
+            
+            print("Probability: ", round(max_res, 4), "\nResult: ", self.inverted_targets[max_idx])
         
-        max_res = 0
-        max_idx = 0
-        for i in range(len(result)):
-            if result[i] > max_res:
-                max_res = result[i]
-                max_idx = i
-        
-        print("Probability: ", round(max_res, 4), "\nResult: ", self.inverted_targets[max_idx])
+        elif self.type == 'c':
 
+            result = [1 for _ in self.targets_mapping.keys()]
 
+            for i in range(len(self.targets_mapping.keys())):
+                for j in range(len(arr_input)):
+                    result[i] = result[i] * (1/((self.classes_mean[i])*np.sqrt(2*np.pi))*np.exp(-((arr_input[j])**2)) / 2*self.classes_deviation[i]**2)
 
+            max_res = 0
+            max_idx = 0
+            for i in range(len(result)):
+                if result[i] > max_res:
+                    max_res = result[i]
+                    max_idx = i
+            
+            print("Probability: ", round(max_res, 4), "\nResult: ", self.inverted_targets[max_idx])
